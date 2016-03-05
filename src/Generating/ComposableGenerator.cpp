@@ -438,6 +438,11 @@ void cComposableGenerator::InitFinishGens(cIniFile & a_IniFile)
 				m_FinishGens.push_back(gen);
 			}
 		}
+		else if (NoCaseCompare(finisher, "OverworldClumpFlowers") == 0)
+		{
+			AString flowers = a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers", "Forest+-2+2,ForestHills+-3+2,FlowerForest; yellowflower,redflower,lilac,rosebush | plains+-2+1,SunflowerPlains; yellowflower,redflower,azurebluet,oxeyedaisy | SunflowerPlains+1+2; sunflower | FlowerForest+2+5; allium,redtulip,orangetulip,whitetulip,pinktulip,oxeyedaisy | Swampland,SwamplandM; brownmushroom,redmushroom,blueorchid");
+			m_FinishGens.push_back(cFinishGenPtr(new cFinishGenClumpTopBlock(Seed, cFinishGenClumpTopBlock::ParseConfigurationString(flowers))));
+		}
 		else if (NoCaseCompare(finisher, "PieceStructures") == 0)
 		{
 			if (split.size() < 2)

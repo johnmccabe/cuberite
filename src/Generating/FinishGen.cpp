@@ -180,6 +180,187 @@ void cFinishGenNetherClumpFoliage::TryPlaceClump(cChunkDesc & a_ChunkDesc, int a
 
 
 ////////////////////////////////////////////////////////////////////////////////
+// cFinishGenClumpTopBlock
+
+void cFinishGenClumpTopBlock::GenFinish(cChunkDesc & a_ChunkDesc)
+{
+	int ChunkX = a_ChunkDesc.GetChunkX();
+	int ChunkZ = a_ChunkDesc.GetChunkZ();
+
+	int NoiseVal = m_Noise.IntNoise2DInt(ChunkX, ChunkZ);
+	EMCSBiome Biome = a_ChunkDesc.GetBiome(cChunkDef::Width / 2, cChunkDef::Width / 2);
+	BiomeInfo info = m_FlowersPerBiome[static_cast<int>(Biome)];
+
+	std::vector<BlockInfo> PossibleBlocks = info.m_Blocks;
+	if (PossibleBlocks.empty())
+	{
+		// No need to go any further. This biome can't generate any blocks.
+		return;
+	}
+
+	int NumClumps = info.m_MaxNumClumpsPerChunk - info.m_MinNumClumpsPerChunk;
+	if (NumClumps == 0)
+	{
+		NumClumps = 1;
+	}
+
+	NumClumps = NoiseVal % NumClumps + info.m_MinNumClumpsPerChunk;
+	int seq = 1;
+	for (int i = 0; i < NumClumps; i++)
+	{
+		int Val1 = m_Noise.IntNoise2DInt(ChunkX * ChunkZ * seq, ChunkZ + ChunkX / seq);
+		int Val2 = m_Noise.IntNoise2DInt(ChunkZ * ChunkX / seq, ChunkZ - ChunkX * seq);
+
+		int PosX = Val1 % (cChunkDef::Width - RANGE_FROM_CENTER * 2) + RANGE_FROM_CENTER;
+		int PosZ = Val2 % (cChunkDef::Width - RANGE_FROM_CENTER * 2) + RANGE_FROM_CENTER;
+
+		int BlockVal = m_Noise.IntNoise2DInt(Val1, Val2);
+
+
+		int TotalWeight = 0;
+		for (auto Block : PossibleBlocks)
+		{
+			TotalWeight += Block.m_Weight;
+		}
+
+		int Weight = BlockVal % TotalWeight;
+		for (auto Block : PossibleBlocks)
+		{
+			Weight -= Block.m_Weight;
+			if (Weight < 0)
+			{
+				TryPlaceFoliageClump(a_ChunkDesc, PosX, PosZ, Block.m_BlockType, Block.m_BlockMeta, Block.m_BlockType == E_BLOCK_BIG_FLOWER);
+				break;
+			}
+		}
+
+		seq++;
+	}
+}
+
+
+
+
+
+void cFinishGenClumpTopBlock::TryPlaceFoliageClump(cChunkDesc & a_ChunkDesc, int a_CenterX, int a_CenterZ, BLOCKTYPE a_BlockType, NIBBLETYPE a_BlockMeta, bool a_IsDoubleTall)
+{
+	int ChunkX = a_ChunkDesc.GetChunkX();
+	int ChunkZ = a_ChunkDesc.GetChunkZ();
+
+	int NumBlocks = m_Noise.IntNoise2DInt(a_CenterX + ChunkX * 16, a_CenterZ + ChunkZ * 16) % (MAX_NUM_FOLIAGE - MIN_NUM_FOLIAGE) + MIN_NUM_FOLIAGE + 1;
+	for (int i = 1; i < NumBlocks; i++)
+	{
+		int x = a_CenterX + ((m_Noise.IntNoise2DInt(i * ChunkX * a_CenterX, i * ChunkZ) % RANGE_FROM_CENTER * 2) - RANGE_FROM_CENTER);
+		int z = a_CenterZ + ((m_Noise.IntNoise2DInt(i * ChunkZ, i * ChunkX * a_CenterZ) % RANGE_FROM_CENTER * 2) - RANGE_FROM_CENTER);
+		int Top = a_ChunkDesc.GetHeight(x, z);
+
+		if (a_ChunkDesc.GetBlockType(x, Top, z) != E_BLOCK_GRASS)
+		{
+			continue;
+		}
+
+		a_ChunkDesc.SetBlockTypeMeta(x, Top + 1, z, a_BlockType, a_BlockMeta);
+
+		if (a_IsDoubleTall)
+		{
+			a_ChunkDesc.SetBlockTypeMeta(x, Top + 2, z, E_BLOCK_BIG_FLOWER, 8);
+		}
+	}
+
+}
+
+
+
+
+
+std::vector<cFinishGenClumpTopBlock::BiomeInfo> cFinishGenClumpTopBlock::ParseConfigurationString(AString a_String)
+{
+	std::vector<BiomeInfo> BiomeList;
+
+	// Initialize the vector for all biomes.
+	for (int i = 0; i < biMaxVariantBiome; i++)
+	{
+		BiomeList.push_back(BiomeInfo());
+	}
+
+	AStringVector ClumpList = StringSplitAndTrim(a_String, "|");
+	for (auto RawClumpInfo : ClumpList)
+	{
+		AStringVector ClumpInfo = StringSplitAndTrim(RawClumpInfo, ";");
+
+		// Information about a clump is divided in 2 parts. The biomes they can be in and the blocks that can be placed.
+		if (ClumpInfo.size() != 2)
+		{
+			LOGWARNING("Data missing for \"%s\". Please divide biome and blocks with a semi colon", RawClumpInfo);
+			continue;
+		}
+
+		AStringVector Biomes = StringSplitAndTrim(ClumpInfo[0], ",");
+		AStringVector Blocks = StringSplitAndTrim(ClumpInfo[1], ",");
+
+		for (auto RawBiomeInfo : Biomes)
+		{
+			AStringVector BiomeInfo = StringSplitAndTrim(RawBiomeInfo, "+");
+			AString BiomeName = BiomeInfo[0];
+			EMCSBiome Biome = StringToBiome(BiomeName);
+			if (Biome == biInvalidBiome)
+			{
+				LOGWARNING("Biome \"%s\" is invalid.", BiomeName);
+				continue;
+			}
+
+			if (BiomeInfo.size() == 2)
+			{
+				// Only the minimum amount of clumps per chunk is changed.
+				int MinNumClump = 1;
+				if (!StringToInteger(BiomeInfo[1], MinNumClump))
+				{
+					LOGWARNING("Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
+					continue;
+				}
+				BiomeList[Biome].m_MinNumClumpsPerChunk = MinNumClump;
+
+				// In case the minimum number is higher than the current maximum value we change the max to the minimum value.
+				BiomeList[Biome].m_MaxNumClumpsPerChunk = std::max(MinNumClump, BiomeList[Biome].m_MaxNumClumpsPerChunk);
+			}
+			else if (BiomeInfo.size() == 3)
+			{
+				// Both the minimum and maximum amount of clumps per chunk is changed.
+				int MinNumClumps = 0, MaxNumClumps = 1;
+				if (!StringToInteger(BiomeInfo[1], MinNumClumps) || !StringToInteger(BiomeInfo[2], MaxNumClumps))
+				{
+					LOGWARNING("Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
+					continue;
+				}
+
+				BiomeList[Biome].m_MaxNumClumpsPerChunk = MaxNumClumps + 1;
+				BiomeList[Biome].m_MinNumClumpsPerChunk = MinNumClumps;
+			}
+
+			// TODO: Make the weight configurable.
+			for (auto BlockName : Blocks)
+			{
+				cItem Block = cItem();
+				if (!StringToItem(BlockName, Block) && IsValidBlock(Block.m_ItemType))
+				{
+					LOGWARNING("Block \"%s\" is invalid", BlockName);
+					continue;
+				}
+
+				BlockInfo info = BlockInfo(static_cast<BLOCKTYPE>(Block.m_ItemType), static_cast<NIBBLETYPE>(Block.m_ItemDamage), 100);
+				BiomeList[Biome].m_Blocks.push_back(info);
+			}
+		}
+	}
+
+	return BiomeList;
+}
+
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 // cFinishGenGlowStone:
 
 void cFinishGenGlowStone::GenFinish(cChunkDesc & a_ChunkDesc)
