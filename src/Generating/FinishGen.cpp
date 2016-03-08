@@ -191,7 +191,7 @@ void cFinishGenClumpTopBlock::GenFinish(cChunkDesc & a_ChunkDesc)
 	EMCSBiome Biome = a_ChunkDesc.GetBiome(cChunkDef::Width / 2, cChunkDef::Width / 2);
 	BiomeInfo info = m_FlowersPerBiome[static_cast<int>(Biome)];
 
-	std::vector<BlockInfo> PossibleBlocks = info.m_Blocks;
+	const auto & PossibleBlocks = info.m_Blocks;
 	if (PossibleBlocks.empty())
 	{
 		// No need to go any further. This biome can't generate any blocks.
@@ -218,13 +218,13 @@ void cFinishGenClumpTopBlock::GenFinish(cChunkDesc & a_ChunkDesc)
 
 
 		int TotalWeight = 0;
-		for (auto Block : PossibleBlocks)
+		for (const auto & Block : PossibleBlocks)
 		{
 			TotalWeight += Block.m_Weight;
 		}
 
 		int Weight = BlockVal % TotalWeight;
-		for (auto Block : PossibleBlocks)
+		for (const auto & Block : PossibleBlocks)
 		{
 			Weight -= Block.m_Weight;
 			if (Weight < 0)
@@ -273,87 +273,79 @@ void cFinishGenClumpTopBlock::TryPlaceFoliageClump(cChunkDesc & a_ChunkDesc, int
 
 
 
-std::vector<cFinishGenClumpTopBlock::BiomeInfo> cFinishGenClumpTopBlock::ParseConfigurationString(AString a_String)
+void cFinishGenClumpTopBlock::ParseConfigurationString(AString a_RawClumpInfo, std::vector<BiomeInfo> & a_Output)
 {
-	std::vector<BiomeInfo> BiomeList;
-
 	// Initialize the vector for all biomes.
-	for (int i = 0; i < biMaxVariantBiome; i++)
+	for (int i = a_Output.size(); i < biMaxVariantBiome; i++)
 	{
-		BiomeList.push_back(BiomeInfo());
+		a_Output.push_back(BiomeInfo());
 	}
 
-	AStringVector ClumpList = StringSplitAndTrim(a_String, "|");
-	for (auto RawClumpInfo : ClumpList)
-	{
-		AStringVector ClumpInfo = StringSplitAndTrim(RawClumpInfo, ";");
+	AStringVector ClumpInfo = StringSplitAndTrim(a_RawClumpInfo, ";");
 
-		// Information about a clump is divided in 2 parts. The biomes they can be in and the blocks that can be placed.
-		if (ClumpInfo.size() != 2)
+	// Information about a clump is divided in 2 parts. The biomes they can be in and the blocks that can be placed.
+	if (ClumpInfo.size() != 2)
+	{
+		LOGWARNING("OverworldClumpFoliage: Data missing for \"%s\". Please divide biome and blocks with a semi colon", a_RawClumpInfo);
+		return;
+	}
+
+	AStringVector Biomes = StringSplitAndTrim(ClumpInfo[0], ",");
+	AStringVector Blocks = StringSplitAndTrim(ClumpInfo[1], ",");
+
+	for (const auto & RawBiomeInfo : Biomes)
+	{
+		AStringVector BiomeInfo = StringSplitAndTrim(RawBiomeInfo, "+");
+		AString BiomeName = BiomeInfo[0];
+		EMCSBiome Biome = StringToBiome(BiomeName);
+		if (Biome == biInvalidBiome)
 		{
-			LOGWARNING("Data missing for \"%s\". Please divide biome and blocks with a semi colon", RawClumpInfo);
+			LOGWARNING("Biome \"%s\" is invalid.", BiomeName);
 			continue;
 		}
 
-		AStringVector Biomes = StringSplitAndTrim(ClumpInfo[0], ",");
-		AStringVector Blocks = StringSplitAndTrim(ClumpInfo[1], ",");
-
-		for (auto RawBiomeInfo : Biomes)
+		if (BiomeInfo.size() == 2)
 		{
-			AStringVector BiomeInfo = StringSplitAndTrim(RawBiomeInfo, "+");
-			AString BiomeName = BiomeInfo[0];
-			EMCSBiome Biome = StringToBiome(BiomeName);
-			if (Biome == biInvalidBiome)
+			// Only the minimum amount of clumps per chunk is changed.
+			int MinNumClump = 1;
+			if (!StringToInteger(BiomeInfo[1], MinNumClump))
 			{
-				LOGWARNING("Biome \"%s\" is invalid.", BiomeName);
+				LOGWARNING("OverworldClumpFoliage: Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
+				continue;
+			}
+			a_Output[Biome].m_MinNumClumpsPerChunk = MinNumClump;
+
+			// In case the minimum number is higher than the current maximum value we change the max to the minimum value.
+			a_Output[Biome].m_MaxNumClumpsPerChunk = std::max(MinNumClump, a_Output[Biome].m_MaxNumClumpsPerChunk);
+		}
+		else if (BiomeInfo.size() == 3)
+		{
+			// Both the minimum and maximum amount of clumps per chunk is changed.
+			int MinNumClumps = 0, MaxNumClumps = 1;
+			if (!StringToInteger(BiomeInfo[1], MinNumClumps) || !StringToInteger(BiomeInfo[2], MaxNumClumps))
+			{
+				LOGWARNING("Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
 				continue;
 			}
 
-			if (BiomeInfo.size() == 2)
-			{
-				// Only the minimum amount of clumps per chunk is changed.
-				int MinNumClump = 1;
-				if (!StringToInteger(BiomeInfo[1], MinNumClump))
-				{
-					LOGWARNING("Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
-					continue;
-				}
-				BiomeList[Biome].m_MinNumClumpsPerChunk = MinNumClump;
+			a_Output[Biome].m_MaxNumClumpsPerChunk = MaxNumClumps + 1;
+			a_Output[Biome].m_MinNumClumpsPerChunk = MinNumClumps;
+		}
 
-				// In case the minimum number is higher than the current maximum value we change the max to the minimum value.
-				BiomeList[Biome].m_MaxNumClumpsPerChunk = std::max(MinNumClump, BiomeList[Biome].m_MaxNumClumpsPerChunk);
-			}
-			else if (BiomeInfo.size() == 3)
+		// TODO: Make the weight configurable.
+		for (const auto & BlockName : Blocks)
+		{
+			cItem Block = cItem();
+			if (!StringToItem(BlockName, Block) && IsValidBlock(Block.m_ItemType))
 			{
-				// Both the minimum and maximum amount of clumps per chunk is changed.
-				int MinNumClumps = 0, MaxNumClumps = 1;
-				if (!StringToInteger(BiomeInfo[1], MinNumClumps) || !StringToInteger(BiomeInfo[2], MaxNumClumps))
-				{
-					LOGWARNING("Invalid data in \"%s\". Second parameter is either not existing or a number", RawBiomeInfo);
-					continue;
-				}
-
-				BiomeList[Biome].m_MaxNumClumpsPerChunk = MaxNumClumps + 1;
-				BiomeList[Biome].m_MinNumClumpsPerChunk = MinNumClumps;
+				LOGWARNING("Block \"%s\" is invalid", BlockName);
+				continue;
 			}
 
-			// TODO: Make the weight configurable.
-			for (auto BlockName : Blocks)
-			{
-				cItem Block = cItem();
-				if (!StringToItem(BlockName, Block) && IsValidBlock(Block.m_ItemType))
-				{
-					LOGWARNING("Block \"%s\" is invalid", BlockName);
-					continue;
-				}
-
-				BlockInfo info = BlockInfo(static_cast<BLOCKTYPE>(Block.m_ItemType), static_cast<NIBBLETYPE>(Block.m_ItemDamage), 100);
-				BiomeList[Biome].m_Blocks.push_back(info);
-			}
+			FoliageInfo info = FoliageInfo(static_cast<BLOCKTYPE>(Block.m_ItemType), static_cast<NIBBLETYPE>(Block.m_ItemDamage), 100);
+			a_Output[Biome].m_Blocks.push_back(info);
 		}
 	}
-
-	return BiomeList;
 }
 
 

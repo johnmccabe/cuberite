@@ -75,12 +75,13 @@ class cFinishGenClumpTopBlock :
 {
 public:
 	// Contains the meta, type and weight for a clump block
-	struct BlockInfo
+	struct FoliageInfo
 	{
 		BLOCKTYPE m_BlockType;
 		NIBBLETYPE m_BlockMeta;
 		int m_Weight;
-		BlockInfo(BLOCKTYPE a_BlockType, NIBBLETYPE a_BlockMeta, int a_Weight) :
+
+		FoliageInfo(BLOCKTYPE a_BlockType, NIBBLETYPE a_BlockMeta, int a_Weight) :
 			m_BlockType(a_BlockType),
 			m_BlockMeta(a_BlockMeta),
 			m_Weight(a_Weight)
@@ -92,14 +93,15 @@ public:
 	{
 		int m_MinNumClumpsPerChunk;
 		int m_MaxNumClumpsPerChunk;
-		std::vector<BlockInfo> m_Blocks;
+		std::vector<FoliageInfo> m_Blocks;
+
 		BiomeInfo() :
 			m_MinNumClumpsPerChunk(0),
 			m_MaxNumClumpsPerChunk(2),
 			m_Blocks()
 		{}
 
-		BiomeInfo(int a_MinNumClumpsPerChunk, int a_MaxNumClumpsPerChunk, std::vector<BlockInfo> a_Blocks) :
+		BiomeInfo(int a_MinNumClumpsPerChunk, int a_MaxNumClumpsPerChunk, std::vector<FoliageInfo> a_Blocks) :
 			m_MinNumClumpsPerChunk(a_MinNumClumpsPerChunk),
 			m_MaxNumClumpsPerChunk(a_MaxNumClumpsPerChunk),
 			m_Blocks(a_Blocks)
@@ -109,14 +111,14 @@ public:
 
 	cFinishGenClumpTopBlock(int a_Seed, std::vector<BiomeInfo> a_BlockList) :
 		m_Noise(a_Seed),
-		m_FlowersPerBiome(a_BlockList)
+		m_FlowersPerBiome()
 	{
-		m_FlowersPerBiome = a_BlockList;
+		std::swap(a_BlockList, m_FlowersPerBiome);
 	}
 
 	/** Parses a string and returns a vector with a length of biMaxVariantBiome.
-		The format of the string is "<Biomes separated with a comma>;<Blocks separated with a comma>". This can also be repeated with a | */
-	static std::vector<BiomeInfo> ParseConfigurationString(AString a_String);
+	The format of the string is "<Biomes separated with a comma>;<Blocks separated with a comma>". This can also be repeated with a | */
+	static void ParseConfigurationString(AString a_String, std::vector<BiomeInfo> & a_Output = std::vector<BiomeInfo>());
 
 protected:
 
