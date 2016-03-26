@@ -440,28 +440,7 @@ void cComposableGenerator::InitFinishGens(cIniFile & a_IniFile)
 		}
 		else if (NoCaseCompare(finisher, "OverworldClumpFlowers") == 0)
 		{
-			std::vector<cFinishGenClumpTopBlock::BiomeInfo> flowers;
-			int NumGeneratorValues = a_IniFile.GetNumValues("Generator");
-			int GeneratorKeyId = a_IniFile.FindKey("Generator");
-			for (int i = 0; i < NumGeneratorValues; i++)
-			{
-				AString ValueName = a_IniFile.GetValueName("Generator", i);
-				if (ValueName.substr(0, AString("OverworldClumpFlowers-").size()) == "OverworldClumpFlowers-")
-				{
-					AString & RawClump = a_IniFile.GetValue(GeneratorKeyId, i);
-					cFinishGenClumpTopBlock::ParseConfigurationString(RawClump, flowers);
-				}
-			}
-
-			if (flowers.size() == 0)
-			{
-				cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers-1", "Forest+-2+2,ForestHills+-3+2,FlowerForest; yellowflower,redflower,lilac,rosebush"));
-				cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers-2", "Plains+-2+1,SunflowerPlains; yellowflower,redflower,azurebluet,oxeyedaisy"));
-				cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers-3", "SunflowerPlains+1+2; sunflower"));
-				cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers-4", "FlowerForest+2+5; allium,redtulip,orangetulip,whitetulip,pinktulip,oxeyedaisy"));
-				cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", "OverworldClumpFlowers-5", "Swampland,SwamplandM; brownmushroom,redmushroom,blueorchid"));
-			}
-			
+			std::vector<cFinishGenClumpTopBlock::BiomeInfo> flowers = cFinishGenClumpTopBlock::ParseIniFile(a_IniFile, "OverworldClumpFlowers");
 			m_FinishGens.push_back(cFinishGenPtr(new cFinishGenClumpTopBlock(Seed, flowers)));
 		}
 		else if (NoCaseCompare(finisher, "PieceStructures") == 0)

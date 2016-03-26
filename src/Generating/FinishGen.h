@@ -120,6 +120,8 @@ public:
 	The format of the string is "<Biomes separated with a comma>;<Blocks separated with a comma>". This can also be repeated with a | */
 	static void ParseConfigurationString(AString a_String, std::vector<BiomeInfo> & a_Output = std::vector<BiomeInfo>());
 
+	/** Parses an inifile in search for all clumps */
+	static std::vector<BiomeInfo> ParseIniFile(cIniFile & a_IniFile, AString a_ClumpPrefix);
 protected:
 
 	cNoise m_Noise;

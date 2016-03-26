@@ -281,7 +281,7 @@ void cFinishGenClumpTopBlock::ParseConfigurationString(AString a_RawClumpInfo, s
 		a_Output.push_back(BiomeInfo());
 	}
 
-	AStringVector ClumpInfo = StringSplitAndTrim(a_RawClumpInfo, ";");
+	AStringVector ClumpInfo = StringSplitAndTrim(a_RawClumpInfo, "=");
 
 	// Information about a clump is divided in 2 parts. The biomes they can be in and the blocks that can be placed.
 	if (ClumpInfo.size() != 2)
@@ -290,12 +290,12 @@ void cFinishGenClumpTopBlock::ParseConfigurationString(AString a_RawClumpInfo, s
 		return;
 	}
 
-	AStringVector Biomes = StringSplitAndTrim(ClumpInfo[0], ",");
-	AStringVector Blocks = StringSplitAndTrim(ClumpInfo[1], ",");
+	AStringVector Biomes = StringSplitAndTrim(ClumpInfo[0], ";");
+	AStringVector Blocks = StringSplitAndTrim(ClumpInfo[1], ";");
 
 	for (const auto & RawBiomeInfo : Biomes)
 	{
-		AStringVector BiomeInfo = StringSplitAndTrim(RawBiomeInfo, "+");
+		AStringVector BiomeInfo = StringSplitAndTrim(RawBiomeInfo, ",");
 		AString BiomeName = BiomeInfo[0];
 		EMCSBiome Biome = StringToBiome(BiomeName);
 		if (Biome == biInvalidBiome)
@@ -346,6 +346,37 @@ void cFinishGenClumpTopBlock::ParseConfigurationString(AString a_RawClumpInfo, s
 			a_Output[Biome].m_Blocks.push_back(info);
 		}
 	}
+}
+
+
+
+
+
+std::vector<cFinishGenClumpTopBlock::BiomeInfo> cFinishGenClumpTopBlock::ParseIniFile(cIniFile & a_IniFile, AString a_ClumpPrefix)
+{
+	std::vector<cFinishGenClumpTopBlock::BiomeInfo> foliage;
+	int NumGeneratorValues = a_IniFile.GetNumValues("Generator");
+	int GeneratorKeyId = a_IniFile.FindKey("Generator");
+	for (int i = 0; i < NumGeneratorValues; i++)
+	{
+		AString ValueName = a_IniFile.GetValueName("Generator", i);
+		if (ValueName.substr(0, a_ClumpPrefix.size()) == a_ClumpPrefix)
+		{
+			AString & RawClump = a_IniFile.GetValue(GeneratorKeyId, i);
+			cFinishGenClumpTopBlock::ParseConfigurationString(RawClump, foliage);
+		}
+	}
+
+	if (foliage.size() == 0)
+	{
+		cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", a_ClumpPrefix + "-1", "Forest, -2, 2; ForestHills, -3, 2; FlowerForest = yellowflower, redflower, lilac, rosebush"), foliage);
+		cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", a_ClumpPrefix + "-2", "Plains, -2, 1; SunflowerPlains = yellowflower, redflower, azurebluet, oxeyedaisy"), foliage);
+		cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", a_ClumpPrefix + "-3", "SunflowerPlains, 1, 2 = sunflower"), foliage);
+		cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", a_ClumpPrefix + "-4", "FlowerForest, 2, 5 = allium, redtulip, orangetulip, whitetulip, pinktulip, oxeyedaisy"), foliage);
+		cFinishGenClumpTopBlock::ParseConfigurationString(a_IniFile.GetValueSet("Generator", a_ClumpPrefix + "-5", "Swampland, SwamplandM = brownmushroom, redmushroom, blueorchid"), foliage);
+	}
+
+	return foliage;
 }
 
 
